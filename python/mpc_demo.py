@@ -132,6 +132,37 @@ def run_sign(inShare, cryptoType):
     print("ok")
     return sig
 
+def run_verify(inShare, cryptoType):
+    print(cryptoType + " verifying...")
+    if not args.data_file:
+        sys.exit("Input data missing")
+    with open(args.data_file, "rb") as f:
+        inData = f.read()
+
+    if not args.out_file:
+        sys.exit("Signature data in output_file missing")
+    with open(args.out_file, "rb") as f:
+        inSig = f.read()
+
+    if cryptoType == 'ECDSA':
+        if len(inData) > 32:
+            sys.exit("Input too long. Data should be hashed before ECDSA signing.")
+        obj = mpc_crypto.Ecdsa(peer, inShare)
+    elif cryptoType == 'EDDSA':
+        obj = mpc_crypto.Eddsa(peer, inShare)
+    else:
+        sys.exit("Verify not implemented in python for " + cryptoType)
+
+    with obj:
+        #obj.initSign(inData)
+        #exec_mpc_exchange(obj)
+        #sig = obj.getSignResult()
+        if peer == CLIENT:
+            obj.verify(inData, inSig)
+            #obj.verify(inData, sig) # verify sig we just calculated
+            print("verification ok")
+    return ""
+
 
 def run_import(inShare, cryptoType='generic'):
     print("Importing key...")
@@ -178,6 +209,9 @@ def run_command(params):
     elif params.command == 'sign':
         out = run_sign(inStr, params.type)
         outFileDefault = params.type + '_signature'
+    elif params.command == 'verify':
+        out = run_verify(inStr, params.type)
+        outFileDefault = params.type + '_verify'
     outputFile = args.out_file if args.out_file else outFileDefault + \
         '_' + str(peer) + '.dat'
     return out, outputFile
@@ -203,7 +237,7 @@ def run_server():
         # print(params)
         out, outputFile = run_command(params)
 
-    if params.command != 'sign':  # only client receives the signature
+    if params.command != 'sign' and params.command != 'verify':  # only client receives the signature && do not overwrite sig on verify
         with open(outputFile, "wb") as f:
             f.write(out)
     clientsocket.close()
@@ -228,12 +262,13 @@ def run_client():
     if args.repeat > 1:
         tookStr += ' on average'
     print(tookStr)
-    with open(outputFile, "wb") as f:
-        f.write(out)
+    if args.command != 'verify': # do not overwrite sig on verify
+        with open(outputFile, "wb") as f:
+            f.write(out)
     clientsocket.close()
 
 
-commands = ['generate', 'import', 'sign', 'derive']
+commands = ['generate', 'import', 'sign', 'derive', 'verify']
 types = ['EDDSA', 'ECDSA', 'BIP32', 'generic']
 parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter,
                                  conflict_handler='resolve',
@@ -261,6 +296,12 @@ parser.add_argument('--repeat', type=int, default=1,
 
 
 args = parser.parse_args()
+
+if args.command == 'verify':
+    peer = CLIENT
+    run_command(args);
+    exit(0)
+
 if not args.server:
     if not args.command or not args.type:
         parser.error('Command and Type required for Client')

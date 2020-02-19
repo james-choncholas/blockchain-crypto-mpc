@@ -1,0 +1,5 @@
+**.o
+libmpc_crypto.so
+mpc_crypto_bench
+**.pyc
+src/utils/precompiled.h.gch
